@@ -849,9 +849,10 @@ void verifyReturnStatement( struct expr_sem *expr, struct PType *funcReturn )
 	}
 }
 
-__BOOLEAN insertParamIntoSymTable( struct SymTable *table, struct param_sem *params, int scope )
+__BOOLEAN insertParamIntoSymTable( struct SymTable *table, struct param_sem *params, int scope, int stackEntry )
 {
 	__BOOLEAN result = __FALSE;
+	int entry = stackEntry;
 
 	// without parameters
 	if( params == 0 ) {
@@ -870,7 +871,7 @@ __BOOLEAN insertParamIntoSymTable( struct SymTable *table, struct param_sem *par
 				for( idPtr=(parPtr->idlist) ; idPtr!=0 ; idPtr=(idPtr->next) ) {
 					if( verifyRedeclaration( table, idPtr->value, scope ) ==__FALSE ) { result = __TRUE;  }
 					else {	// without error, insert into symbol table
-						newNode = createParamNode( idPtr->value, scope, parPtr->pType );
+						newNode = createParamNode( idPtr->value, scope, parPtr->pType, entry++ );
 						insertTab( table, newNode );
 					}
 				}
@@ -897,7 +898,7 @@ __BOOLEAN checkFuncParam( struct param_sem *params ){
 	return result;	// __TRUE: with some error(s)
 }
 
-void insertFuncIntoSymTable( struct SymTable *table, const char *id, struct param_sem *params, struct PType *retType, int scope, __BOOLEAN isDefine )
+void insertFuncIntoSymTable( struct SymTable *table, const char *id, struct param_sem *params, struct PType *retType, int scope, __BOOLEAN isDefine, int stackEntry )
 {
 	if( verifyRedeclaration( table, id, scope ) == __FALSE ) { return; }	
 	else {
@@ -938,7 +939,7 @@ void insertFuncIntoSymTable( struct SymTable *table, const char *id, struct para
 			}
 		}
 	
-		struct SymNode *newNode = createFuncNode( id, scope, retType, formalParam );
+		struct SymNode *newNode = createFuncNode( id, scope, retType, formalParam, stackEntry );
 		newNode->isFuncDefine = isDefine;
 		insertTab( table, newNode );
 	}

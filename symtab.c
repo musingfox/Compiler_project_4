@@ -55,7 +55,7 @@ void insertTab( struct SymTable *table, struct SymNode *newNode )
 	}
 }
 
-struct SymNode* createVarNode( const char *name, int scope, struct PType *type ) 
+struct SymNode* createVarNode( const char *name, int scope, struct PType *type, int stackEntry ) 
 {
 	struct SymNode *newNode = (struct SymNode *)malloc( sizeof(struct SymNode) );
 	/* setup name */
@@ -69,6 +69,7 @@ struct SymNode* createVarNode( const char *name, int scope, struct PType *type )
 	newNode->category = VARIABLE_t;
 	/* without attribute */
 	newNode->attribute = 0;
+	newNode->stackEntry = stackEntry;
 
 	newNode->next = 0;
 	newNode->prev = 0;
@@ -76,7 +77,7 @@ struct SymNode* createVarNode( const char *name, int scope, struct PType *type )
 	return newNode;
 }
 
-struct SymNode* createParamNode( const char *name, int scope, struct PType *type )
+struct SymNode* createParamNode( const char *name, int scope, struct PType *type, int stackEntry )
 {
 	struct SymNode *newNode = (struct SymNode *)malloc( sizeof(struct SymNode) );
 	/* setup name */
@@ -90,6 +91,8 @@ struct SymNode* createParamNode( const char *name, int scope, struct PType *type
 	newNode->category = PARAMETER_t;
 	/* without attribute */
 	newNode->attribute = 0;
+
+	newNode->stackEntry = stackEntry;
 
 	newNode->next = 0;
 	newNode->prev = 0;
@@ -119,7 +122,7 @@ struct SymNode * createConstNode( const char *name, int scope, struct PType *pTy
 	return newNode;
 }
 
-struct SymNode *createFuncNode( const char *name, int scope, struct PType *pType, struct FuncAttr *params )
+struct SymNode *createFuncNode( const char *name, int scope, struct PType *pType, struct FuncAttr *params, int stackEntry )
 {
 	struct SymNode *newNode = (struct SymNode *)malloc( sizeof(struct SymNode) );
 	// setup name /
@@ -134,6 +137,8 @@ struct SymNode *createFuncNode( const char *name, int scope, struct PType *pType
 	//* setup attribute /
 	newNode->attribute = (union SymAttr*)malloc(sizeof(union SymAttr));
 	newNode->attribute->formalParam = params;
+
+	newNode->stackEntry = stackEntry;
 
 	newNode->next = 0;
 	newNode->prev = 0;

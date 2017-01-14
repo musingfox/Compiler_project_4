@@ -14,9 +14,9 @@ extern char buf[256];
 extern int Opt_Symbol;		/* declared in lex.l */
 
 extern FILE* jfp;
+int top = 0;
 
 int scope = 0;
-int stack = 0;
 char fileName[256];
 struct SymTable *symbolTable;
 __BOOLEAN paramError;
@@ -116,23 +116,26 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 
 					if( node != 0 ){
 						if(verifyFuncDeclaration( symbolTable, $4, $1, node ) == __TRUE){	
-							insertParamIntoSymTable( symbolTable, $4, scope+1 );
+							insertParamIntoSymTable( symbolTable, $4, scope+1, top );
 						}				
 					}
 					else{
-						insertParamIntoSymTable( symbolTable, $4, scope+1 );				
+						insertParamIntoSymTable( symbolTable, $4, scope+1, top );				
 						insertFuncIntoSymTable( symbolTable, $2, $4, $1, scope, __TRUE );
 						// done function definition
-						char paramTypeCnt[255];
-						while ($4!=0){
+						struct param_sem* param = $4;
+						char paramType[255];
+						while (param!=0){
 							char temp[1];
-							strcpy(temp, getType($4->pType));
-							strcat(paramTypeCnt, temp);
-							$4 = $4->next;
+							strncpy(temp, getType(param->pType->type), 1);
+							strcat(paramType, temp);
+							param = param->next;
+							top++;
 						}
+						int paramCnt = strlen(paramType);
 						char funcType[1];
-						strcpy(funcType, getType($1));
-						fprintf(jfp, ".method public static %s(%s)%s\n", $2, paramTypeCnt, funcType);
+						strcpy(funcType, getType($1->type));
+						fprintf(jfp, ".method public static %s(%s)%s\n", $2, paramType, funcType);
 						fprintf(jfp, ".limit stack 100\n");
 						fprintf(jfp, ".limit locals 100\n");
 					}
@@ -169,11 +172,11 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 
 					if( node != 0 ){
 						if(verifyFuncDeclaration( symbolTable, $4, createPType( VOID_t ), node ) == __TRUE){	
-							insertParamIntoSymTable( symbolTable, $4, scope+1 );				
+							insertParamIntoSymTable( symbolTable, $4, scope+1, top );				
 						}
 					}
 					else{
-						insertParamIntoSymTable( symbolTable, $4, scope+1 );				
+						insertParamIntoSymTable( symbolTable, $4, scope+1, top );				
 						insertFuncIntoSymTable( symbolTable, $2, $4, createPType( VOID_t ), scope, __TRUE );
 					}
 				}
@@ -242,8 +245,6 @@ var_decl : scalar_type identifier_list SEMICOLON
 					if( verifyRedeclaration( symbolTable, ptr->para->idlist->value, scope ) == __FALSE ) { }
 					else {
 						if( verifyVarInitValue( $1, ptr, symbolTable, scope ) ==  __TRUE ){	
-							newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType);
-							insertTab( symbolTable, newNode );
 							//	done global variables
 							if (scope == 0){
 								switch (ptr->para->pType->type){
@@ -260,10 +261,14 @@ var_decl : scalar_type identifier_list SEMICOLON
 										fprintf(jfp, ".field public static %s D\n", ptr->para->idlist->value);
 										break;
 									default:
-										fprintf("global variable declare X");
 										break;
 								}
-							}											
+								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, -1 );
+							}
+							else{
+								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, top++ );
+							}	
+							insertTab( symbolTable, newNode );								
 						}
 					}
 				}
@@ -461,11 +466,11 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 							verifyAssignmentTypeMatch( $1, $3 );
 					}
 				 | PRINT logical_expression SEMICOLON 
-				 	{ 
+				 	{
+				 		verifyScalarExpr( $2, "print" );
 				 		fprintf(jfp, "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
 				 		// todo: build stack //
 				 		fprintf(jfp, "invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
-				 		verifyScalarExpr( $2, "print"); 
 				 	}
 				 | READ variable_reference SEMICOLON 
 					{ 

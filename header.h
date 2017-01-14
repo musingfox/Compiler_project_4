@@ -108,7 +108,7 @@ struct SymNode {
 	SEMTYPE category;		
 	struct PType *type;
 	union SymAttr *attribute;
-	
+	int stackEntry;
 	struct SymNode *next;
 	struct SymNode *prev;
 	

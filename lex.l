@@ -2,6 +2,8 @@
 
 #include "y.tab.h"
 
+FILE* jfp;
+
 #define LIST                strcat(buf, yytext)
 #define token(t)            {LIST; if (Opt_Token) printf("<%s>\n", #t);}
 #define tokenInteger(t, i)  {LIST; if (Opt_Token) printf("<%s:%d>\n", t, i);}
@@ -350,6 +352,7 @@ float scientificToFloat( const char *str );
 		LIST;
 		if (Opt_Source)
   	        	printf("%d:%s\n", linenum, buf);
+  	    fprintf(jfp, "Line #%d: %s\n", linenum, buf);
 		linenum++;
 		memset( buf, 0, MAX_LINE_LENG );
 	}
@@ -369,6 +372,7 @@ float scientificToFloat( const char *str );
   	      LIST;
   	      if (Opt_Source)
   	        printf("%d:%s\n", linenum, buf);
+  	      fprintf(jfp, "Line #%d: %s\n", linenum, buf);
   	      linenum++;
   	      buf[0] = '\0';
         }
@@ -377,7 +381,6 @@ float scientificToFloat( const char *str );
 		if(Opt_Statistic){
 			set(&id_head,yytext);
 		}
-		tokenString("id",yytext);	
 		char actualID[33];
 		memset( actualID, 0, sizeof(actualID) );
 		strncpy( actualID, yytext, 32 );
