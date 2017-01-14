@@ -17,6 +17,8 @@ extern FILE* jfp;
 int top = 0;
 
 int scope = 0;
+
+int readFlag = 0;
 char fileName[256];
 struct SymTable *symbolTable;
 __BOOLEAN paramError;
@@ -386,7 +388,7 @@ const_decl 	: CONST scalar_type const_list SEMICOLON
 									newNode = createConstNode( ptr->name, scope, $2, ptr->value );
 									insertTab( symbolTable, newNode );
 								}
-							}							
+							}
 							else{
 								newNode = createConstNode( ptr->name, scope, $2, ptr->value );
 								insertTab( symbolTable, newNode );
@@ -448,6 +450,7 @@ compound_statement : {scope++;}L_BRACE var_const_stmt_list R_BRACE
 							
 						deleteScope( symbolTable, scope );	// leave this scope, delete...
 						scope--; 
+						// todo: pop stack //
 					}
 				   ;
 
@@ -489,7 +492,35 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 				 | READ variable_reference SEMICOLON 
 					{ 
 						if( verifyExistence( symbolTable, $2, scope, __TRUE ) == __TRUE )						
-							verifyScalarExpr( $2, "read" ); 
+							verifyScalarExpr( $2, "read" );
+						if (readFlag == 0){
+							fprintf(jfp, "new java/util/Scanner\n");
+							fprintf(jfp, "dup\n");
+							fprintf(jfp, "getstatic java/lang/System/in Ljava/io/InputStream;\n");
+							fprintf(jfp, "invokespecial java/util/Scanner/<init>(Ljava/io/InputStream;\n)V");
+							fprintf(jfp, "putstatic test/_sc Ljava/util/Scanner;\n");
+							readFlag = 1;
+						}
+						fprintf(jfp, "getstatic test/_sc Ljava/util/Scanner\n;");
+						fprintf(jfp, "invokevirtual java/util/Scanner/nextInt()");
+						char type;
+						switch($2->pType->type){
+							case INTEGER_t:
+								type = 'I';
+								break;
+							case BOOLEAN_t:
+								type = 'Z';
+								break;
+							case DOUBLE_t:
+								type = 'D';
+								break;
+							case FLOAT_t:
+								type = 'F';
+								break;
+							default:
+							break;
+						}
+						fprintf(jfp, "%c\n", type);
 					}
 				 ;
 

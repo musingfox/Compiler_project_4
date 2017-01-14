@@ -26,6 +26,7 @@ char* getType(int type){
 			T[0] = 'X';
 			break;
 	}
+	
 	return T;
 }
 
