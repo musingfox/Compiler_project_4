@@ -122,23 +122,23 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					else{
 						insertParamIntoSymTable( symbolTable, $4, scope+1, top );				
 						insertFuncIntoSymTable( symbolTable, $2, $4, $1, scope, __TRUE );
-						// done function definition
-						struct param_sem* param = $4;
-						char paramType[255];
-						while (param!=0){
-							char temp[1];
-							strncpy(temp, getType(param->pType->type), 1);
-							strcat(paramType, temp);
-							param = param->next;
-							top++;
-						}
-						int paramCnt = strlen(paramType);
-						char funcType[1];
-						strcpy(funcType, getType($1->type));
-						fprintf(jfp, ".method public static %s(%s)%s\n", $2, paramType, funcType);
-						fprintf(jfp, ".limit stack 100\n");
-						fprintf(jfp, ".limit locals 100\n");
 					}
+					// done function definition
+					struct param_sem* param = $4;
+					char paramType[255];
+					while (param!=0){
+						char temp[1];
+						strncpy(temp, getType(param->pType->type), 1);
+						strcat(paramType, temp);
+						param = param->next;
+						top++;
+					}
+					int paramCnt = strlen(paramType);
+					char funcType[1];
+					strcpy(funcType, getType($1->type));
+					fprintf(jfp, ".method public static %s(%s)%s\n", $2, paramType, funcType);
+					fprintf(jfp, ".limit stack 100\n");
+					fprintf(jfp, ".limit locals 100\n");
 				}
 			} 	
 			compound_statement { funcReturn = 0; }
@@ -179,6 +179,20 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 						insertParamIntoSymTable( symbolTable, $4, scope+1, top );				
 						insertFuncIntoSymTable( symbolTable, $2, $4, createPType( VOID_t ), scope, __TRUE );
 					}
+					// done function definition
+					struct param_sem* param = $4;
+					char paramType[255];
+					while (param!=0){
+						char temp[1];
+						strncpy(temp, getType(param->pType->type), 1);
+						strcat(paramType, temp);
+						param = param->next;
+						top++;
+					}
+					int paramCnt = strlen(paramType);
+					fprintf(jfp, ".method public static %s(%s)V\n", $2, paramType);
+					fprintf(jfp, ".limit stack 100\n");
+					fprintf(jfp, ".limit locals 100\n");
 				}
 			} 
 			compound_statement { funcReturn = 0; }		  

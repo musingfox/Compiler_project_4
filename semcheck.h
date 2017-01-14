@@ -15,7 +15,7 @@ void increaseDim( struct expr_sem* expr, SEMTYPE dimType );
 struct param_sem *createParam( struct idNode_sem *ids, struct PType *pType );
 void param_sem_addParam( struct param_sem *lhs, struct param_sem *rhs );
 
-__BOOLEAN insertParamIntoSymTable( struct SymTable *table, struct param_sem *params, int scope, int stack );
+__BOOLEAN insertParamIntoSymTable( struct SymTable *table, struct param_sem *params, int scope, int stackEntry );
 void insertFuncIntoSymTable( struct SymTable *table, const char *id, struct param_sem *params, struct PType *retType, int scope , __BOOLEAN isDefine);
 /* verification */
 void verifyArrayDim( struct PType *pType, int lo, int hi );

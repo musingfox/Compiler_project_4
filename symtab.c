@@ -350,7 +350,7 @@ void printSymTable( struct SymTable *table, int __scope )
 						break;
 					}
 				}
-
+				printf("\n%d\n", ptr->stackEntry);
 				printf("\n");
 			}	// if( ptr->scope == __scope )
 		}	// for( ptr=(table->entry[i]) ; ptr!=0 ; ptr=(ptr->next) )
