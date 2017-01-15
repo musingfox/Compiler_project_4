@@ -311,20 +311,6 @@ var_decl : scalar_type identifier_list SEMICOLON
 								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, -1 );
 							}
 							else{
-								switch (ptr->para->pType->type){
-									case BOOLEAN_t:
-									case INTEGER_t:
-										fprintf(jfp, "iload %d\n", top);
-										break;
-									case FLOAT_t:
-										fprintf(jfp, "fload %d\n", top);
-										break;
-									case DOUBLE_t:
-										fprintf(jfp, "dload %d\n", top);
-										break;
-									default:
-										break;
-								}
 								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, top++ );
 							}	
 							insertTab( symbolTable, newNode );								
@@ -530,7 +516,6 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 				 	{
 				 		verifyScalarExpr( $2, "print" );
 				 		fprintf(jfp, "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
-				 		// todo: build stack //
 				 		fprintf(jfp, "invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
 				 	}
 				 | READ variable_reference SEMICOLON 
@@ -546,25 +531,29 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 							readFlag = 1;
 						}
 						fprintf(jfp, "getstatic test/_sc Ljava/util/Scanner\n;");
-						fprintf(jfp, "invokevirtual java/util/Scanner/nextInt()");
-						char type;
+						fprintf(jfp, "invokevirtual java/util/Scanner/");
+						//todo : variable reference
+						struct SymNode *curr = lookupSymbol(symbolTable, $2->varRef->id, scope, __FALSE);
 						switch($2->pType->type){
 							case INTEGER_t:
-								type = 'I';
+								fprintf(jfp, "nextInt() I\n");
+								fprintf(jfp, "istore %d\n", curr->stackEntry);
 								break;
 							case BOOLEAN_t:
-								type = 'Z';
+								fprintf(jfp, "nextBoolean() Z\n");
+								fprintf(jfp, "istore %d\n", curr->stackEntry);
 								break;
 							case DOUBLE_t:
-								type = 'D';
+								fprintf(jfp, "nextDouble() D\n");
+								fprintf(jfp, "dstore %d\n", curr->stackEntry);
 								break;
 							case FLOAT_t:
-								type = 'F';
+								fprintf(jfp, "nextFloat() F\n");
+								fprintf(jfp, "fstore %d\n", curr->stackEntry);
 								break;
 							default:
-							break;
+								break;
 						}
-						fprintf(jfp, "%c\n", type);
 					}
 				 ;
 
@@ -820,6 +809,29 @@ factor : variable_reference
 			  }
 			  else {
 				$$->beginningOp = NONE_t;
+			  }
+			  switch ($$->pType->type){
+			  	case INTEGER_t:
+				  	fprintf(jfp, "sipush %d\n", $1->value.integerVal);
+			  		break;
+			  	case BOOLEAN_t:
+			  		if ($1->value.booleanVal == 0){
+			  			fprintf(jfp, "iconst_0\n");
+			  		}
+			  		else
+			  			fprintf(jfp, "iconst_1\n");
+			  		break;
+			  	case DOUBLE_t:
+				  	fprintf(jfp, "ldc %f\n", $1->value.doubleVal);
+				  		break;
+			  	case FLOAT_t:
+				  	fprintf(jfp, "ldc %f\n", $1->value.floatVal);
+			  		break;
+			  	case STRING_t:
+				  	fprintf(jfp, "ldc %s\n", $1->value.stringVal);
+			  		break;
+			  	default:
+			  		break;
 			  }
 		}
 	   ;
