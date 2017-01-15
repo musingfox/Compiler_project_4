@@ -128,13 +128,28 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					// done function definition
 					struct param_sem* param = $4;
 					char paramType[255];
+					int cnt=0;
 					while (param!=0){
 						char temp[1];
-						strncpy(temp, getType(param->pType->type), 1);
-						strcat(paramType, temp);
+						switch (param->pType->type){
+							case INTEGER_t:
+								paramType[cnt++] = 'I';
+								break;
+							case BOOLEAN_t:
+								paramType[cnt++] = 'Z';
+								break;
+							case FLOAT_t:
+								paramType[cnt++] = 'F';
+								break;
+							case DOUBLE_t:
+								paramType[cnt++] = 'D';
+								break;
+							default:
+							break;
+						}
 						param = param->next;
-						top++;
 					}
+					top += cnt;
 					int paramCnt = strlen(paramType);
 					char funcType[1];
 					strcpy(funcType, getType($1->type));
@@ -184,14 +199,28 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					// done function definition
 					struct param_sem* param = $4;
 					char paramType[255];
+					int cnt=0;
 					while (param!=0){
 						char temp[1];
-						strncpy(temp, getType(param->pType->type), 1);
-						strcat(paramType, temp);
+						switch (param->pType->type){
+							case INTEGER_t:
+								paramType[cnt++] = 'I';
+								break;
+							case BOOLEAN_t:
+								paramType[cnt++] = 'Z';
+								break;
+							case FLOAT_t:
+								paramType[cnt++] = 'F';
+								break;
+							case DOUBLE_t:
+								paramType[cnt++] = 'D';
+								break;
+							default:
+							break;
+						}
 						param = param->next;
-						top++;
 					}
-					int paramCnt = strlen(paramType);
+					top += cnt;
 					fprintf(jfp, ".method public static %s(%s)V\n", $2, paramType);
 					fprintf(jfp, ".limit stack 100\n");
 					fprintf(jfp, ".limit locals 100\n");
@@ -448,9 +477,10 @@ compound_statement : {scope++;}L_BRACE var_const_stmt_list R_BRACE
 						if( Opt_Symbol == 1 )
 							printSymTable( symbolTable, scope );
 							
-						deleteScope( symbolTable, scope );	// leave this scope, delete...
+						int pop = deleteScope( symbolTable, scope );	// leave this scope, delete...
 						scope--; 
 						// todo: pop stack //
+						top -= pop;
 					}
 				   ;
 

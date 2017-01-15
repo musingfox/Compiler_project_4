@@ -21,7 +21,7 @@ struct SymNode *lookupSymbol( struct SymTable *table, const char *id, int scope,
 
 
 void deleteSymbol( struct SymNode *symbol );
-void deleteScope( struct SymTable *table, int scope );
+int deleteScope( struct SymTable *table, int scope );
 
 
 

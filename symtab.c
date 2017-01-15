@@ -191,9 +191,10 @@ void deleteSymbol( struct SymNode *symbol )
 	free( symbol );
 }
 
-void deleteScope( struct SymTable *table, int scope )
+int deleteScope( struct SymTable *table, int scope )
 {
 	int i;
+	int pop=0;
 
 	//struct SymNode *collectList = 0;
 
@@ -206,6 +207,7 @@ void deleteScope( struct SymTable *table, int scope )
 			if( table->entry[i]->scope == scope ) {
 				//deleteSymbol( table->entry[i] );
 				table->entry[i] = 0;
+				pop++;
 			}
 		}
 		else {
@@ -215,11 +217,13 @@ void deleteScope( struct SymTable *table, int scope )
 						previous->next->prev = 0;
 						table->entry[i] = current;
 						//deleteSymbol( previous );
+						pop++;
 					}
 					else {
 						previous->prev->next = current;
 						current->prev = previous->prev;
 						//deleteSymbol( previous );
+						pop++;
 					}
 				}
 			}
@@ -228,16 +232,18 @@ void deleteScope( struct SymTable *table, int scope )
 				if( previous->prev == 0 ) {
 					table->entry[0] = 0;
 					//deleteSymbol( previous );
+					pop++;
 				}
 				else {
 					previous->prev->next = 0;
 					//deleteSymbol( previous );
+					pop++;
 
 				}
 			}
-
 		}
 	}
+	return pop;
 }
 /**
  * if flag == 1, invoked at symbol table dump
