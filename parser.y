@@ -100,6 +100,9 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 				else{
 					insertFuncIntoSymTable( symbolTable, $2, 0, $1, scope, __TRUE );
 				}
+				fprintf(jfp, ".method public static main([Ljava/lang/String;)V\n");
+				fprintf(jfp, ".limit stack 100\n");
+				fprintf(jfp, ".limit locals 100\n");
 			}
 			compound_statement { funcReturn = 0; }	
 		  | scalar_type ID L_PAREN parameter_list R_PAREN  
@@ -479,7 +482,6 @@ compound_statement : {scope++;}L_BRACE var_const_stmt_list R_BRACE
 							
 						int pop = deleteScope( symbolTable, scope );	// leave this scope, delete...
 						scope--; 
-						// todo: pop stack //
 						top -= pop;
 					}
 				   ;
@@ -737,11 +739,28 @@ add_op	: ADD_OP { $$ = ADD_t; }
 		   
 term : term mul_op factor
 		{
+			switch ($1->pType->type){
+				case INTEGER_t:
+					fprintf(jfp, "i");
+					break;
+				case FLOAT_t:
+					fprintf(jfp, "i");
+					break;
+				case FLOAT_t:
+					fprintf(jfp, "i");
+					break;
+			}
 			if( $2 == MOD_t ) {
 				verifyModOp( $1, $3 );
 			}
 			else {
 				verifyArithmeticOp( $1, $2, $3 );
+				if ($2 == DIV_t){
+					fprintf(jfp, "%s\n", );
+				}
+				else{
+
+				}
 			}
 			$$ = $1;
 		}
@@ -758,6 +777,41 @@ factor : variable_reference
 			verifyExistence( symbolTable, $1, scope, __FALSE );
 			$$ = $1;
 			$$->beginningOp = NONE_t;
+			struct SymNode *curr = lookupSymbol(symbolTable, $1->varRef->id, scope, __FALSE);
+			if (curr->scope == 0){
+				switch($1->pType->type){
+					case INTEGER_t:
+						fprintf(jfp, "getstatic %s/%s I\n", fileName, curr->name);
+						break;
+					case BOOLEAN_t:
+						fprintf(jfp, "getstatic %s/%s Z\n", fileName, curr->name);
+						break;
+					case DOUBLE_t:
+						fprintf(jfp, "getstatic %s/%s D\n", fileName, curr->name);
+						break;
+					case FLOAT_t:
+						fprintf(jfp, "getstatic %s/%s F\n", fileName, curr->name);
+						break;
+					default:
+						break;
+				}
+			}
+			else {
+				switch($1->pType->type){
+					case INTEGER_t:
+					case BOOLEAN_t:
+						fprintf(jfp, "iload %d\n",curr->stackEntry);
+						break;
+					case DOUBLE_t:
+						fprintf(jfp, "dload %d\n",curr->stackEntry);
+						break;
+					case FLOAT_t:
+						fprintf(jfp, "fload %d\n",curr->stackEntry);
+						break;
+					default:
+						break;
+				}
+			}
 		}
 	   | SUB_OP variable_reference
 		{
@@ -765,6 +819,44 @@ factor : variable_reference
 			verifyUnaryMinus( $2 );
 			$$ = $2;
 			$$->beginningOp = SUB_t;
+			struct SymNode *curr = lookupSymbol(symbolTable, $2->varRef->id, scope, __FALSE);
+			if (curr->scope == 0){
+				switch($2->pType->type){
+					case INTEGER_t:
+						fprintf(jfp, "getstatic %s/%s I\n", fileName, curr->name);
+						fprintf(jfp, "ineg\n", fileName, curr->name);
+						break;
+					case DOUBLE_t:
+						fprintf(jfp, "getstatic %s/%s D\n", fileName, curr->name);
+						fprintf(jfp, "dneg\n", fileName, curr->name);
+						break;
+					case FLOAT_t:
+						fprintf(jfp, "getstatic %s/%s F\n", fileName, curr->name);
+						fprintf(jfp, "fneg\n", fileName, curr->name);
+						break;
+					default:
+						break;
+				}
+			}
+			else {
+				switch($2->pType->type){
+					case INTEGER_t:
+					case BOOLEAN_t:
+						fprintf(jfp, "iload %d\n",curr->stackEntry);
+						fprintf(jfp, "ineg\n", fileName, curr->name);
+						break;
+					case DOUBLE_t:
+						fprintf(jfp, "dload %d\n",curr->stackEntry);
+						fprintf(jfp, "dneg\n", fileName, curr->name);
+						break;
+					case FLOAT_t:
+						fprintf(jfp, "fload %d\n",curr->stackEntry);
+						fprintf(jfp, "fneg\n", fileName, curr->name);
+						break;
+					default:
+						break;
+				}
+			}
 		}		
 	   | L_PAREN logical_expression R_PAREN
 		{
