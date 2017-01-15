@@ -311,6 +311,20 @@ var_decl : scalar_type identifier_list SEMICOLON
 								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, -1 );
 							}
 							else{
+								switch (ptr->para->pType->type){
+									case BOOLEAN_t:
+									case INTEGER_t:
+										fprintf(jfp, "iload %d\n", top);
+										break;
+									case FLOAT_t:
+										fprintf(jfp, "fload %d\n", top);
+										break;
+									case DOUBLE_t:
+										fprintf(jfp, "dload %d\n", top);
+										break;
+									default:
+										break;
+								}
 								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, top++ );
 							}	
 							insertTab( symbolTable, newNode );								
