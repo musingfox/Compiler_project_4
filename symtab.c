@@ -5,33 +5,6 @@
 #include <stdlib.h>
 #include "semcheck.h"
 
-//
-
-char* getType(int type){
-	char* T;
-	switch(type){
-		case INTEGER_t:
-			T[0] = 'I';
-			break;
-		case FLOAT_t:
-			T[0] = 'F';
-			break;
-		case DOUBLE_t:
-			T[0] = 'D';
-			break;
-		case BOOLEAN_t:
-			T[0] = 'Z';
-			break;
-		default:
-			T[0] = 'X';
-			break;
-	}
-	
-	return T;
-}
-
-//
-
 
 void initSymTab( struct SymTable *table )
 {	int i;

@@ -131,7 +131,6 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 						insertParamIntoSymTable( symbolTable, $4, scope+1, 0 );				
 						insertFuncIntoSymTable( symbolTable, $2, $4, $1, scope, __TRUE );
 					}
-					// done function definition
 					struct param_sem* param = $4;
 					char paramType[255];
 					int cnt=0;
@@ -156,10 +155,22 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 						param = param->next;
 					}
 					top += cnt;
-					int paramCnt = strlen(paramType);
-					char funcType[1];
-					strcpy(funcType, getType($1->type));
-					fprintf(jfp, ".method public static %s(%s)%s\n", $2, paramType, funcType);
+					switch ($1->type){
+						case INTEGER_t:
+							fprintf(jfp, ".method public static %s(%s)I\n", $2, paramType);
+							break;
+						case BOOLEAN_t:
+							fprintf(jfp, ".method public static %s(%s)Z\n", $2, paramType);
+							break;
+						case FLOAT_t:
+							fprintf(jfp, ".method public static %s(%s)F\n", $2, paramType);
+							break;
+						case DOUBLE_t:
+							fprintf(jfp, ".method public static %s(%s)D\n", $2, paramType);
+							break;
+						default:
+						break;
+					}
 					fprintf(jfp, ".limit stack 100\n");
 					fprintf(jfp, ".limit locals 100\n");
 				}
@@ -666,8 +677,19 @@ while_statement : WHILE L_PAREN logical_expression { verifyBooleanExpr( $3, "whi
 
 
 				
-for_statement : FOR L_PAREN initial_expression SEMICOLON control_expression SEMICOLON increment_expression R_PAREN  { inloop++; }
-					compound_statement  { inloop--; }
+for_statement : FOR L_PAREN initial_expression SEMICOLON 
+				{
+
+				}
+				control_expression SEMICOLON 
+				{
+
+				}
+				increment_expression R_PAREN  
+				{ 
+					inloop++; 
+				}
+				compound_statement  { inloop--; }
 			  ;
 
 initial_expression : initial_expression COMMA statement_for		
@@ -730,6 +752,33 @@ statement_for 	: variable_reference ASSIGN_OP logical_expression
 function_invoke_statement : ID L_PAREN logical_expression_list R_PAREN SEMICOLON
 							{
 								verifyFuncInvoke( $1, $3, symbolTable, scope );
+								struct expr_sem *curr = $3;
+								char paramType[10];
+								int cnt = 0;
+								while (curr != 0){
+									char type;
+									paramType[cnt] = '\0';
+									switch (curr->pType->type){
+										case INTEGER_t:
+											paramType[cnt++] = 'I';
+											break;
+										case BOOLEAN_t:
+											paramType[cnt++] = 'Z';
+											break;
+										case FLOAT_t:
+											paramType[cnt++] = 'F';
+											break;
+										case DOUBLE_t:
+											paramType[cnt++] = 'D';
+											break;
+										default:
+											paramType[cnt++] = '\0';
+											break;
+									}
+									curr = curr->next ;
+								}
+								paramType[cnt] = '\0';
+								fprintf(jfp, "invokestatic output/%s(%s) type\n", $1, paramType);
 							}
 						  | ID L_PAREN R_PAREN SEMICOLON
 							{
@@ -777,6 +826,7 @@ logical_expression : logical_expression OR_OP logical_term
 					{
 						verifyAndOrOp( $1, OR_t, $3 );
 						$$ = $1;
+						fprintf(jfp, "ior\n");
 					}
 				   | logical_term { $$ = $1; }
 				   ;
@@ -785,6 +835,7 @@ logical_term : logical_term AND_OP logical_factor
 				{
 					verifyAndOrOp( $1, AND_t, $3 );
 					$$ = $1;
+					fprintf(jfp, "iand\n");
 				}
 			 | logical_factor { $$ = $1; }
 			 ;
@@ -793,6 +844,7 @@ logical_factor : NOT_OP logical_factor
 				{
 					verifyUnaryNOT( $2 );
 					$$ = $2;
+					fprintf(jfp, "iconst_1\nixor\n");
 				}
 			   | relation_expression { $$ = $1; }
 			   ;
@@ -1022,6 +1074,51 @@ factor : variable_reference
 		{
 			$$ = verifyFuncInvoke( $1, $3, symbolTable, scope );
 			$$->beginningOp = NONE_t;
+			struct expr_sem *curr = $3;
+			char paramType[10];
+			int cnt = 0;
+			while (curr != 0){
+				char type;
+				paramType[cnt] = '\0';
+				switch (curr->pType->type){
+					case INTEGER_t:
+						paramType[cnt++] = 'I';
+						break;
+					case BOOLEAN_t:
+						paramType[cnt++] = 'Z';
+						break;
+					case FLOAT_t:
+						paramType[cnt++] = 'F';
+						break;
+					case DOUBLE_t:
+						paramType[cnt++] = 'D';
+						break;
+					default:
+						paramType[cnt++] = '\0';
+						break;
+				}
+				curr = curr->next ;
+			}
+			paramType[cnt] = '\0';
+			fprintf(jfp, "invokestatic output/%s(%s)", $1, paramType);
+			struct SymNode *func = lookupSymbol(symbolTable, $1, 0, __FALSE);
+			struct PType *pType = func->type;
+			switch(pType->type){
+				case INTEGER_t:
+					fprintf(jfp, "I\n");
+					break;
+				case BOOLEAN_t:
+					fprintf(jfp, "Z\n");
+					break;
+				case FLOAT_t:
+					fprintf(jfp, "F\n");
+					break;
+				case DOUBLE_t:
+					fprintf(jfp, "D\n");
+					break;
+				default:
+					break;
+			}
 		}
 	   | SUB_OP ID L_PAREN logical_expression_list R_PAREN
 	    {
