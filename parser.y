@@ -100,11 +100,13 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 				else{
 					insertFuncIntoSymTable( symbolTable, $2, 0, $1, scope, __TRUE );
 				}
-				fprintf(jfp, ".method public static main([Ljava/lang/String;)V\n");
-				fprintf(jfp, ".limit stack 100\n");
-				fprintf(jfp, ".limit locals 100\n");
+				if (strcmp($2, "main") == 0){
+					fprintf(jfp, ".method public static main([Ljava/lang/String;)V\n");
+					fprintf(jfp, ".limit stack 100\n");
+					fprintf(jfp, ".limit locals 100\n");
+				}
 			}
-			compound_statement { funcReturn = 0; }	
+			compound_statement { funcReturn = 0; fprintf(jfp, ".end method\n");}	
 		  | scalar_type ID L_PAREN parameter_list R_PAREN  
 			{				
 				funcReturn = $1;
@@ -121,11 +123,11 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 
 					if( node != 0 ){
 						if(verifyFuncDeclaration( symbolTable, $4, $1, node ) == __TRUE){	
-							insertParamIntoSymTable( symbolTable, $4, scope+1, top );
+							insertParamIntoSymTable( symbolTable, $4, scope+1, 0 );
 						}				
 					}
 					else{
-						insertParamIntoSymTable( symbolTable, $4, scope+1, top );				
+						insertParamIntoSymTable( symbolTable, $4, scope+1, 0 );				
 						insertFuncIntoSymTable( symbolTable, $2, $4, $1, scope, __TRUE );
 					}
 					// done function definition
@@ -192,11 +194,11 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 
 					if( node != 0 ){
 						if(verifyFuncDeclaration( symbolTable, $4, createPType( VOID_t ), node ) == __TRUE){	
-							insertParamIntoSymTable( symbolTable, $4, scope+1, top );				
+							insertParamIntoSymTable( symbolTable, $4, scope+1, 0 );				
 						}
 					}
 					else{
-						insertParamIntoSymTable( symbolTable, $4, scope+1, top );				
+						insertParamIntoSymTable( symbolTable, $4, scope+1, 0 );				
 						insertFuncIntoSymTable( symbolTable, $2, $4, createPType( VOID_t ), scope, __TRUE );
 					}
 					// done function definition
@@ -219,7 +221,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 								paramType[cnt++] = 'D';
 								break;
 							default:
-							break;
+								break;
 						}
 						param = param->next;
 					}
@@ -238,6 +240,7 @@ funct_decl : scalar_type ID L_PAREN R_PAREN SEMICOLON
 			}
 		   | scalar_type ID L_PAREN parameter_list R_PAREN SEMICOLON
 		    {
+		    	printf("QQ");
 				paramError = checkFuncParam( $4 );
 				if( paramError == __TRUE ){
 					fprintf( stdout, "########## Error at Line#%d: param(s) with several fault!! ##########\n", linenum );
@@ -510,15 +513,68 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 						if( $3->isDeref == __FALSE ) {
 							flagRHS = verifyExistence( symbolTable, $3, scope, __FALSE );
 						}
+						struct SymNode *curr = lookupSymbol(symbolTable, $1->varRef->id, scope, __FALSE);
 						// if both LHS and RHS are exists, verify their type
 						if( flagLHS==__TRUE && flagRHS==__TRUE )
 							verifyAssignmentTypeMatch( $1, $3 );
+						if (curr->scope == 0){
+							switch ($1->pType->type){
+								case BOOLEAN_t:
+									fprintf(jfp, "putstatic output/%s Z\n", curr->name);
+									break;
+								case INTEGER_t:
+									fprintf(jfp, "putstatic output/%s I\n", curr->name);
+									break;
+								case DOUBLE_t:
+									fprintf(jfp, "putstatic output/%s D\n", curr->name);
+									break;
+								case FLOAT_t:
+									fprintf(jfp, "putstatic output/%s F\n", curr->name);
+									break;
+								default:
+									break;
+							}
+						}
+						else {
+							switch ($1->pType->type){
+								case BOOLEAN_t:
+								case INTEGER_t:
+									fprintf(jfp, "istore");
+									break;
+								case DOUBLE_t:
+									fprintf(jfp, "dstore");
+									break;
+								case FLOAT_t:
+									fprintf(jfp, "fstore");
+									break;
+								default:
+									break;
+							}
+							fprintf(jfp, " %d\n", curr->stackEntry);
+						}
 					}
-				 | PRINT logical_expression SEMICOLON 
+				 | PRINT {fprintf(jfp, "getstatic java/lang/System/out Ljava/io/PrintStream;\n");} logical_expression SEMICOLON 
 				 	{
-				 		verifyScalarExpr( $2, "print" );
-				 		fprintf(jfp, "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
-				 		fprintf(jfp, "invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
+				 		verifyScalarExpr( $3, "print" );
+				 		switch ($3->pType->type){
+				 			case BOOLEAN_t:
+				 				fprintf(jfp, "invokevirtual java/io/PrintStream/print(Z)V\n");
+				 				break;
+				 			case INTEGER_t:
+					 			fprintf(jfp, "invokevirtual java/io/PrintStream/print(I)V\n");
+				 				break;
+				 			case FLOAT_t:
+					 			fprintf(jfp, "invokevirtual java/io/PrintStream/print(F)V\n");
+				 				break;
+				 			case DOUBLE_t:
+					 			fprintf(jfp, "invokevirtual java/io/PrintStream/print(D)V\n");
+				 				break;
+				 			case STRING_t:
+					 			fprintf(jfp, "invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
+				 				break;
+				 			default:
+				 				break;
+				 		}
 				 	}
 				 | READ variable_reference SEMICOLON 
 					{ 
@@ -528,33 +584,54 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 							fprintf(jfp, "new java/util/Scanner\n");
 							fprintf(jfp, "dup\n");
 							fprintf(jfp, "getstatic java/lang/System/in Ljava/io/InputStream;\n");
-							fprintf(jfp, "invokespecial java/util/Scanner/<init>(Ljava/io/InputStream;\n)V");
-							fprintf(jfp, "putstatic test/_sc Ljava/util/Scanner;\n");
+							fprintf(jfp, "invokespecial java/util/Scanner/<init>(Ljava/io/InputStream;)V\n");
+							fprintf(jfp, "putstatic output/_sc Ljava/util/Scanner;\n");
 							readFlag = 1;
 						}
-						fprintf(jfp, "getstatic test/_sc Ljava/util/Scanner\n;");
+						fprintf(jfp, "getstatic output/_sc Ljava/util/Scanner;\n");
 						fprintf(jfp, "invokevirtual java/util/Scanner/");
 						//todo : variable reference
 						struct SymNode *curr = lookupSymbol(symbolTable, $2->varRef->id, scope, __FALSE);
-						switch($2->pType->type){
-							case INTEGER_t:
-								fprintf(jfp, "nextInt() I\n");
-								fprintf(jfp, "istore %d\n", curr->stackEntry);
-								break;
-							case BOOLEAN_t:
-								fprintf(jfp, "nextBoolean() Z\n");
-								fprintf(jfp, "istore %d\n", curr->stackEntry);
-								break;
-							case DOUBLE_t:
-								fprintf(jfp, "nextDouble() D\n");
-								fprintf(jfp, "dstore %d\n", curr->stackEntry);
-								break;
-							case FLOAT_t:
-								fprintf(jfp, "nextFloat() F\n");
-								fprintf(jfp, "fstore %d\n", curr->stackEntry);
-								break;
-							default:
-								break;
+						if (curr->scope == 0){
+							fprintf(jfp, "putstatic output/%s", curr->name);
+							switch($2->pType->type){
+								case INTEGER_t:;
+									fprintf(jfp, "I");
+									break;
+								case BOOLEAN_t:
+									fprintf(jfp, "Z");
+									break;
+								case DOUBLE_t:
+									fprintf(jfp, "D");
+									break;
+								case FLOAT_t:
+									fprintf(jfp, "F");
+									break;
+								default:
+									break;
+							}
+						}
+						else {
+							switch($2->pType->type){
+								case INTEGER_t:
+									fprintf(jfp, "nextInt()I\n");
+									fprintf(jfp, "istore %d\n", curr->stackEntry);
+									break;
+								case BOOLEAN_t:
+									fprintf(jfp, "nextBoolean()Z\n");
+									fprintf(jfp, "istore %d\n", curr->stackEntry);
+									break;
+								case DOUBLE_t:
+									fprintf(jfp, "nextDouble()D\n");
+									fprintf(jfp, "dstore %d\n", curr->stackEntry);
+									break;
+								case FLOAT_t:
+									fprintf(jfp, "nextFloat()F\n");
+									fprintf(jfp, "fstore %d\n", curr->stackEntry);
+									break;
+								default:
+									break;
+							}
 						}
 					}
 				 ;
@@ -663,7 +740,9 @@ jump_statement : CONTINUE SEMICOLON
 				}
 			   | RETURN logical_expression SEMICOLON
 				{
+					fprintf(jfp, "return\n");
 					verifyReturnStatement( $2, funcReturn );
+					fprintf(jfp, "return\n");
 				}
 			   ;
 
@@ -728,6 +807,23 @@ arithmetic_expression : arithmetic_expression add_op term
 			{
 				verifyArithmeticOp( $1, $2, $3 );
 				$$ = $1;
+				switch ($1->pType->type){
+					case INTEGER_t:
+						fprintf(jfp, "i");
+						break;
+					case FLOAT_t:
+						fprintf(jfp, "f");
+						break;
+					case DOUBLE_t:
+						fprintf(jfp, "d");
+						break;
+				}
+				if ($2 == ADD_t){
+					fprintf(jfp, "add\n");
+				}
+				else{
+					fprintf(jfp, "sub\n");
+				}
 			}
                    | relation_expression { $$ = $1; }
 		   | term { $$ = $1; }
@@ -739,27 +835,42 @@ add_op	: ADD_OP { $$ = ADD_t; }
 		   
 term : term mul_op factor
 		{
+			if ($3->pType->type < $1->pType->type){
+				switch ($1->pType->type){
+					case FLOAT_t:
+						fprintf(jfp, "i2f\n");
+						break;
+					case DOUBLE_t:
+						fprintf(jfp, "i2d\n");
+						break;
+					default:
+						break;		
+				}
+			}
 			switch ($1->pType->type){
 				case INTEGER_t:
 					fprintf(jfp, "i");
 					break;
 				case FLOAT_t:
-					fprintf(jfp, "i");
+					fprintf(jfp, "f");
 					break;
-				case FLOAT_t:
-					fprintf(jfp, "i");
+				case DOUBLE_t:
+					fprintf(jfp, "d");
+					break;
+				default:
 					break;
 			}
 			if( $2 == MOD_t ) {
 				verifyModOp( $1, $3 );
+				fprintf(jfp, "rem\n");
 			}
 			else {
 				verifyArithmeticOp( $1, $2, $3 );
 				if ($2 == DIV_t){
-					fprintf(jfp, "%s\n", );
+					fprintf(jfp, "div\n");
 				}
 				else{
-
+					fprintf(jfp, "mul\n");
 				}
 			}
 			$$ = $1;
@@ -781,16 +892,16 @@ factor : variable_reference
 			if (curr->scope == 0){
 				switch($1->pType->type){
 					case INTEGER_t:
-						fprintf(jfp, "getstatic %s/%s I\n", fileName, curr->name);
+						fprintf(jfp, "getstatic output/%s I\n", curr->name);
 						break;
 					case BOOLEAN_t:
-						fprintf(jfp, "getstatic %s/%s Z\n", fileName, curr->name);
+						fprintf(jfp, "getstatic output/%s Z\n", curr->name);
 						break;
 					case DOUBLE_t:
-						fprintf(jfp, "getstatic %s/%s D\n", fileName, curr->name);
+						fprintf(jfp, "getstatic output/%s D\n", curr->name);
 						break;
 					case FLOAT_t:
-						fprintf(jfp, "getstatic %s/%s F\n", fileName, curr->name);
+						fprintf(jfp, "getstatic output/%s F\n", curr->name);
 						break;
 					default:
 						break;
@@ -823,16 +934,16 @@ factor : variable_reference
 			if (curr->scope == 0){
 				switch($2->pType->type){
 					case INTEGER_t:
-						fprintf(jfp, "getstatic %s/%s I\n", fileName, curr->name);
-						fprintf(jfp, "ineg\n", fileName, curr->name);
+						fprintf(jfp, "getstatic output/%s I\n", curr->name);
+						fprintf(jfp, "ineg\n");
 						break;
 					case DOUBLE_t:
-						fprintf(jfp, "getstatic %s/%s D\n", fileName, curr->name);
-						fprintf(jfp, "dneg\n", fileName, curr->name);
+						fprintf(jfp, "getstatic output/%s D\n", curr->name);
+						fprintf(jfp, "dneg\n");
 						break;
 					case FLOAT_t:
-						fprintf(jfp, "getstatic %s/%s F\n", fileName, curr->name);
-						fprintf(jfp, "fneg\n", fileName, curr->name);
+						fprintf(jfp, "getstatic output/%s F\n", curr->name);
+						fprintf(jfp, "fneg\n");
 						break;
 					default:
 						break;
@@ -843,15 +954,15 @@ factor : variable_reference
 					case INTEGER_t:
 					case BOOLEAN_t:
 						fprintf(jfp, "iload %d\n",curr->stackEntry);
-						fprintf(jfp, "ineg\n", fileName, curr->name);
+						fprintf(jfp, "ineg\n");
 						break;
 					case DOUBLE_t:
 						fprintf(jfp, "dload %d\n",curr->stackEntry);
-						fprintf(jfp, "dneg\n", fileName, curr->name);
+						fprintf(jfp, "dneg\n");
 						break;
 					case FLOAT_t:
 						fprintf(jfp, "fload %d\n",curr->stackEntry);
-						fprintf(jfp, "fneg\n", fileName, curr->name);
+						fprintf(jfp, "fneg\n");
 						break;
 					default:
 						break;
@@ -904,7 +1015,7 @@ factor : variable_reference
 			  }
 			  switch ($$->pType->type){
 			  	case INTEGER_t:
-				  	fprintf(jfp, "sipush %d\n", $1->value.integerVal);
+				  	fprintf(jfp, "ldc %d\n", $1->value.integerVal);
 			  		break;
 			  	case BOOLEAN_t:
 			  		if ($1->value.booleanVal == 0){
@@ -920,7 +1031,7 @@ factor : variable_reference
 				  	fprintf(jfp, "ldc %f\n", $1->value.floatVal);
 			  		break;
 			  	case STRING_t:
-				  	fprintf(jfp, "ldc %s\n", $1->value.stringVal);
+				  	fprintf(jfp, "ldc \"%s\"\n", $1->value.stringVal);
 			  		break;
 			  	default:
 			  		break;

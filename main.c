@@ -26,14 +26,13 @@ int  main( int argc, char **argv )
 		FILE *fp = fopen( argv[1], "r" );
 		// create a .j file //
 		char jfile[256];
-		strcpy(fileName, "");
-		strncpy(fileName, argv[1], strlen(argv[1])-2);
-		strcpy(jfile, fileName);
+		strcpy(jfile, "output");
 		strcat(jfile, ".j");
 		jfp = fopen(jfile, "w");
 		fclose(jfp);
 		jfp = fopen(jfile, "a");
-		fprintf(jfp, ".class public %s\n", fileName);
+		fprintf(jfp, "; output.j\n");
+		fprintf(jfp, ".class public output\n");
 		fprintf(jfp, ".super java/lang/Object\n");
 		fprintf(jfp, ".field public static _sc Ljava/util/Scanner;\n");
 		// create a .j file //
