@@ -15,6 +15,7 @@ extern int Opt_Symbol;		/* declared in lex.l */
 
 extern FILE* jfp;
 int top = 0;
+int conditionCnt = 0;
 
 int scope = 0;
 
@@ -106,7 +107,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					fprintf(jfp, ".limit locals 100\n");
 				}
 			}
-			compound_statement { funcReturn = 0; fprintf(jfp, ".end method\n");}	
+			compound_statement { funcReturn = 0;fprintf(jfp, "return\n"); fprintf(jfp, ".end method\n");}	
 		  | scalar_type ID L_PAREN parameter_list R_PAREN  
 			{				
 				funcReturn = $1;
@@ -163,7 +164,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					fprintf(jfp, ".limit locals 100\n");
 				}
 			} 	
-			compound_statement { funcReturn = 0; }
+			compound_statement { funcReturn = 0; fprintf(jfp, "return\n"); fprintf(jfp, ".end method\n");}
 		  | VOID ID L_PAREN R_PAREN 
 			{
 				funcReturn = createPType(VOID_t); 
@@ -177,7 +178,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					insertFuncIntoSymTable( symbolTable, $2, 0, createPType( VOID_t ), scope, __TRUE );	
 				}
 			}
-			compound_statement { funcReturn = 0; }	
+			compound_statement { funcReturn = 0; fprintf(jfp, "return\n"); fprintf(jfp, ".end method\n");}	
 		  | VOID ID L_PAREN parameter_list R_PAREN
 			{									
 				funcReturn = createPType(VOID_t);
@@ -231,7 +232,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					fprintf(jfp, ".limit locals 100\n");
 				}
 			} 
-			compound_statement { funcReturn = 0; }		  
+			compound_statement { funcReturn = 0; fprintf(jfp, "return\n"); fprintf(jfp, ".end method\n");}		  
 		  ;
 
 funct_decl : scalar_type ID L_PAREN R_PAREN SEMICOLON
@@ -240,7 +241,6 @@ funct_decl : scalar_type ID L_PAREN R_PAREN SEMICOLON
 			}
 		   | scalar_type ID L_PAREN parameter_list R_PAREN SEMICOLON
 		    {
-		    	printf("QQ");
 				paramError = checkFuncParam( $4 );
 				if( paramError == __TRUE ){
 					fprintf( stdout, "########## Error at Line#%d: param(s) with several fault!! ##########\n", linenum );
@@ -485,7 +485,6 @@ compound_statement : {scope++;}L_BRACE var_const_stmt_list R_BRACE
 							
 						int pop = deleteScope( symbolTable, scope );	// leave this scope, delete...
 						scope--; 
-						top -= pop;
 					}
 				   ;
 
@@ -637,10 +636,22 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 				 ;
 
 conditional_statement : IF L_PAREN conditional_if  R_PAREN compound_statement
+						{fprintf(jfp, "Lelse_%d:\n", conditionCnt);}
 					  | IF L_PAREN conditional_if  R_PAREN compound_statement
+					  	{
+					  		conditionCnt--;
+					  		fprintf(jfp, "goto LExit_%d\n", conditionCnt++);
+							fprintf(jfp, "Lelse_%d:\n", conditionCnt--);
+					  	}
 						ELSE compound_statement
+						{fprintf(jfp, "LExit_%d:\n", conditionCnt);}
 					  ;
-conditional_if : logical_expression { verifyBooleanExpr( $1, "if" ); };;					  
+conditional_if : logical_expression 
+					{ 
+						verifyBooleanExpr( $1, "if" ); 
+						conditionCnt++;
+						fprintf(jfp, "ifeq Lelse_%d\n", conditionCnt);
+					};					  
 
 				
 while_statement : WHILE L_PAREN logical_expression { verifyBooleanExpr( $3, "while" ); } R_PAREN { inloop++; }
@@ -740,7 +751,6 @@ jump_statement : CONTINUE SEMICOLON
 				}
 			   | RETURN logical_expression SEMICOLON
 				{
-					fprintf(jfp, "return\n");
 					verifyReturnStatement( $2, funcReturn );
 					fprintf(jfp, "return\n");
 				}
@@ -789,8 +799,36 @@ logical_factor : NOT_OP logical_factor
 
 relation_expression : arithmetic_expression relation_operator arithmetic_expression
 					{
+						conditionCnt++;
 						verifyRelOp( $1, $2, $3 );
 						$$ = $1;
+						fprintf(jfp, "fcmpl\n");
+						switch ($2){
+							case LT_t:
+								fprintf(jfp, "iflt Ltrue_%d\n", conditionCnt);
+								break;
+							case LE_t:
+								fprintf(jfp, "ifle Ltrue_%d\n", conditionCnt);
+								break;
+							case EQ_t:
+								fprintf(jfp, "ifeq Ltrue_%d\n", conditionCnt);
+								break;
+							case GE_t:
+								fprintf(jfp, "ifge Ltrue_%d\n", conditionCnt);
+								break;
+							case GT_t:
+								fprintf(jfp, "ifgt Ltrue_%d\n", conditionCnt);
+								break;
+							case NE_t:
+								fprintf(jfp, "ifne Ltrue_%d\n", conditionCnt);
+								break;
+						}
+						fprintf(jfp, "iconst_0\n");
+						fprintf(jfp, "goto Lfalse_%d\n", conditionCnt);
+						fprintf(jfp, "Ltrue_%d:\n", conditionCnt);
+						fprintf(jfp, "iconst_1\n");
+						fprintf(jfp, "Lfalse_%d:\n", conditionCnt);
+						conditionCnt--;
 					}
 					| arithmetic_expression { $$ = $1; }
 					;
