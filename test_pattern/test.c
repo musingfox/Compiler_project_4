@@ -1,5 +1,6 @@
 // test.c
 int a, b;
+int x=1;
 bool d;
 int foo( int a ) {
     int i, result;
@@ -13,6 +14,7 @@ int foo( int a ) {
 }
 int main() {
     int c ;
+    int y=1;
     read a;
     c = foo( a );
     print c;

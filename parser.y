@@ -19,6 +19,8 @@ int condCnt = 0;
 int condStack[50];
 int labelCnt = -1;
 int mainFlag = 0;
+int varList[100] = {0};
+int varCnt = -1;
 
 int scope = 0;
 
@@ -390,6 +392,7 @@ parameter_list : parameter_list COMMA scalar_type ID
 
 var_decl : scalar_type identifier_list SEMICOLON
 			{
+				memset(varList, 0, sizeof(varList));
 				struct varDeclParam *ptr;
 				struct SymNode *newNode;
 				for( ptr=$2 ; ptr!=0 ; ptr=(ptr->next) ) {						
@@ -415,24 +418,48 @@ var_decl : scalar_type identifier_list SEMICOLON
 										break;
 								}
 								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, -1 );
+								insertTab( symbolTable, newNode );
 							}
 							else{
 								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, top++ );
-							}	
-							insertTab( symbolTable, newNode );
-							struct SymNode *var = lookupSymbol(symbolTable, ptr->para->idlist->value, scope, __FALSE);
-							if (scope != 0){
+								insertTab( symbolTable, newNode );
+
 								if (ptr->isInit){
-									int type = $1->type;
-									if (type == 1 || type == 2){
-										fprintf(jfp, "istore %d\n", var->stackEntry);
-									}
-									else{
-										fprintf(jfp, "fstore %d\n", var->stackEntry);
-									}
-								}
+									struct SymNode *var = lookupSymbol(symbolTable, ptr->para->idlist->value, scope, __FALSE);
+									varList[++varCnt] = var->stackEntry;
+								}	
 							}		
 						}
+					}
+				}
+				if (scope != 0){
+					char temp;
+					switch ($1->type){
+						case INTEGER_t:
+							temp = 'I';
+							break;
+						case FLOAT_t:
+							temp = 'F';
+							break;
+						case BOOLEAN_t:
+							temp = 'Z';
+							break;
+						case DOUBLE_t:
+							temp = 'D';
+							break;
+						default:
+							break;
+					}
+					int i = 0;
+					for (i= varCnt ; i >= 0 ; --i){
+						if (temp == 'I' || temp == 'Z'){
+							fprintf(jfp, "istore %d\n", varList[i]);
+						}
+						else if (temp == 'D'){
+							fprintf(jfp, "dstore %d\n", varList[i]);	
+						}
+						else
+							fprintf(jfp, "fstore %d\n", varList[i]);
 					}
 				}
 			}
@@ -1078,7 +1105,6 @@ relation_expression : arithmetic_expression relation_operator arithmetic_express
 						struct expr_sem *b = $3;
 						int typeA = a->pType->type;
 						int typeB = b->pType->type;
-						printf("~~%d\t%d\n", typeA, typeB);
 						if ((typeA == FLOAT_t || typeA == FLOAT_t) || (typeB == FLOAT_t || typeB == DOUBLE_t)){
 							fprintf(jfp, "fcmpl\n");
 						}
@@ -1209,21 +1235,29 @@ factor : variable_reference
 			$$->beginningOp = NONE_t;
 			struct SymNode *curr = lookupSymbol(symbolTable, $1->varRef->id, scope, __FALSE);
 			if (curr->scope == 0){
-				switch($1->pType->type){
-					case INTEGER_t:
-						fprintf(jfp, "getstatic output/%s I\n", curr->name);
-						break;
-					case BOOLEAN_t:
-						fprintf(jfp, "getstatic output/%s Z\n", curr->name);
-						break;
-					case DOUBLE_t:
-						fprintf(jfp, "getstatic output/%s D\n", curr->name);
-						break;
-					case FLOAT_t:
-						fprintf(jfp, "getstatic output/%s F\n", curr->name);
-						break;
-					default:
-						break;
+				if (curr->category == CONSTANT_t){
+					if ($1->pType->type == INTEGER_t || $1->pType->type == BOOLEAN_t)
+						fprintf(jfp, "ldc %d\n", curr->attribute->constVal->value);
+					else
+						fprintf(jfp, "ldc %f\n", curr->attribute->constVal->value);
+				}
+				else{
+					switch($1->pType->type){
+						case INTEGER_t:
+							fprintf(jfp, "getstatic output/%s I\n", curr->name);
+							break;
+						case BOOLEAN_t:
+							fprintf(jfp, "getstatic output/%s Z\n", curr->name);
+							break;
+						case DOUBLE_t:
+							fprintf(jfp, "getstatic output/%s D\n", curr->name);
+							break;
+						case FLOAT_t:
+							fprintf(jfp, "getstatic output/%s F\n", curr->name);
+							break;
+						default:
+							break;
+				}
 				}
 			}
 			else {
@@ -1358,6 +1392,25 @@ factor : variable_reference
 		{
 			$$ = verifyFuncInvoke( $1, 0, symbolTable, scope );
 			$$->beginningOp = NONE_t;
+			fprintf(jfp, "invokestatic output/%s()", $1);
+			struct SymNode *func = lookupSymbol(symbolTable, $1, 0, __FALSE);
+			struct PType *pType = func->type;
+			switch(pType->type){
+				case INTEGER_t:
+					fprintf(jfp, "I\n");
+					break;
+				case BOOLEAN_t:
+					fprintf(jfp, "Z\n");
+					break;
+				case FLOAT_t:
+					fprintf(jfp, "F\n");
+					break;
+				case DOUBLE_t:
+					fprintf(jfp, "D\n");
+					break;
+				default:
+					break;
+			}
 		}
 	   | SUB_OP ID L_PAREN R_PAREN
 		{

@@ -26,8 +26,7 @@ int  main( int argc, char **argv )
 		FILE *fp = fopen( argv[1], "r" );
 		// create a .j file //
 		char jfile[256];
-		strcpy(jfile, "output");
-		strcat(jfile, ".j");
+		strcpy(jfile, "output.j");
 		jfp = fopen(jfile, "w");
 		fclose(jfp);
 		jfp = fopen(jfile, "a");
