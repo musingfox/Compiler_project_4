@@ -15,9 +15,10 @@ extern int Opt_Symbol;		/* declared in lex.l */
 
 extern FILE* jfp;
 int top = 0;
-int conditionCnt = 0;
-int forCnt = 0;
-int whileCnt = 0;
+int condCnt = 0;
+int condStack[50];
+int labelCnt = -1;
+int mainFlag = 0;
 
 int scope = 0;
 
@@ -107,12 +108,35 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					fprintf(jfp, ".method public static main([Ljava/lang/String;)V\n");
 					fprintf(jfp, ".limit stack 100\n");
 					fprintf(jfp, ".limit locals 100\n");
+					mainFlag = 1;
+				}
+				else{
+					switch ($1->type){
+						case INTEGER_t:
+							fprintf(jfp, ".method public static %s()I\n", $2);
+							break;
+						case BOOLEAN_t:
+							fprintf(jfp, ".method public static %s()Z\n", $2);
+							break;
+						case FLOAT_t:
+							fprintf(jfp, ".method public static %s()F\n", $2);
+							break;
+						case DOUBLE_t:
+							fprintf(jfp, ".method public static %s()D\n", $2);
+							break;
+						default:
+						break;
+					}
+					fprintf(jfp, ".limit stack 100\n");
+					fprintf(jfp, ".limit locals 100\n");
+					mainFlag = 0;
 				}
 			}
-			compound_statement 
+			compound_statement
 			{ 
 				funcReturn = 0;
 				if (strcmp($2, "main") != 0){
+					mainFlag = 0;
 					switch($1->type){
 						case BOOLEAN_t:
 						case INTEGER_t:
@@ -125,6 +149,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 							fprintf(jfp, "dreturn\n");
 							break;
 						default:
+							fprintf(jfp, "return\n");
 							break;
 					}
 				}
@@ -204,19 +229,26 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 			compound_statement 
 			{ 
 				funcReturn = 0; 
-				switch($1->type){
-					case BOOLEAN_t:
-					case INTEGER_t:
-						fprintf(jfp, "ireturn\n");
-						break;
-					case FLOAT_t:
-						fprintf(jfp, "freturn\n");
-						break;
-					case DOUBLE_t:
-						fprintf(jfp, "dreturn\n");
-						break;
-					default:
-						break;
+				if (strcmp($2, "main") != 0){
+					mainFlag = 0;
+					switch($1->type){
+						case BOOLEAN_t:
+						case INTEGER_t:
+							fprintf(jfp, "ireturn\n");
+							break;
+						case FLOAT_t:
+							fprintf(jfp, "freturn\n");
+							break;
+						case DOUBLE_t:
+							fprintf(jfp, "dreturn\n");
+							break;
+						default:
+							fprintf(jfp, "return\n");
+							break;
+					}
+				}
+				else {
+					fprintf(jfp, "return\n");
 				}
 				fprintf(jfp, ".end method\n");
 			}
@@ -231,6 +263,17 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 				}
 				else{
 					insertFuncIntoSymTable( symbolTable, $2, 0, createPType( VOID_t ), scope, __TRUE );	
+				}
+				if (strcmp($2, "main") == 0){
+					fprintf(jfp, ".method public static main([Ljava/lang/String;)V\n");
+					fprintf(jfp, ".limit stack 100\n");
+					fprintf(jfp, ".limit locals 100\n");
+					mainFlag = 1;
+				}
+				else{
+					fprintf(jfp, ".limit stack 100\n");
+					fprintf(jfp, ".limit locals 100\n");
+					mainFlag = 0;
 				}
 			}
 			compound_statement { funcReturn = 0; fprintf(jfp, "return\n"); fprintf(jfp, ".end method\n");}	
@@ -376,7 +419,19 @@ var_decl : scalar_type identifier_list SEMICOLON
 							else{
 								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, top++ );
 							}	
-							insertTab( symbolTable, newNode );					
+							insertTab( symbolTable, newNode );
+							struct SymNode *var = lookupSymbol(symbolTable, ptr->para->idlist->value, scope, __FALSE);
+							if (scope != 0){
+								if (ptr->isInit){
+									int type = $1->type;
+									if (type == 1 || type == 2){
+										fprintf(jfp, "istore %d\n", var->stackEntry);
+									}
+									else{
+										fprintf(jfp, "fstore %d\n", var->stackEntry);
+									}
+								}
+							}		
 						}
 					}
 				}
@@ -692,52 +747,56 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 					}
 				 ;
 
-conditional_statement : IF L_PAREN conditional_if  R_PAREN compound_statement
-						{fprintf(jfp, "Lelse_%d:\n", conditionCnt--);}
-					  | IF L_PAREN conditional_if  R_PAREN compound_statement
+conditional_statement : IF L_PAREN cond_add conditional_if  R_PAREN compound_statement
+						{fprintf(jfp, "Lelse_%d:\n", condStack[condCnt--]);}
+					  | IF L_PAREN cond_add conditional_if  R_PAREN compound_statement
 					  	{
-					  		conditionCnt--;
-					  		fprintf(jfp, "goto LExit_%d\n", conditionCnt);
-							fprintf(jfp, "Lelse_%d:\n", conditionCnt);
+					  		fprintf(jfp, "goto LExit_%d\n", condStack[condCnt]);
+							fprintf(jfp, "Lelse_%d:\n", condStack[condCnt]);
 					  	}
 						ELSE compound_statement
-						{fprintf(jfp, "LExit_%d:\n", conditionCnt--);}
+						{fprintf(jfp, "LExit_%d:\n", condStack[condCnt--]);}
 					  ;
+
+cond_add	:	{
+					condCnt++;
+					labelCnt++;
+					condStack[condCnt] = labelCnt;
+				}
+			;
+
 conditional_if : logical_expression 
 					{ 
 						verifyBooleanExpr( $1, "if" ); 
-						conditionCnt++;
-						fprintf(jfp, "ifeq Lelse_%d\n", conditionCnt);
+						fprintf(jfp, "ifeq Lelse_%d\n", condStack[condCnt]);
 					};					  
 
 				
 while_statement : WHILE
 					{
-						fprintf(jfp, "LWbegin_%d:\n", whileCnt++);
+						condCnt++;
+						labelCnt++;
+						condStack[condCnt] = labelCnt;
+						condStack[condCnt] = labelCnt;
+						fprintf(jfp, "LWbegin_%d:\n", condStack[condCnt]);
 					}
 				  L_PAREN logical_expression 
 				  	{ 
 				  		verifyBooleanExpr( $4, "while" );
-				  		fprintf(jfp, "ifeq LWExit_%d\n", whileCnt);
+				  		fprintf(jfp, "ifeq LWExit_%d\n", condStack[condCnt]);
 				  	} 
 				  	R_PAREN { inloop++; }
 					compound_statement 
 					{ 
 						inloop--; 
-						fprintf(jfp, "goto LWbegin_%d\n", whileCnt);
-						fprintf(jfp, "LWExit_%d:\n", whileCnt--);
+						fprintf(jfp, "goto LWbegin_%d\n", condStack[condCnt]);
+						fprintf(jfp, "LWExit_%d:\n", condStack[condCnt--]);
 					}
 				| { inloop++; } DO 
-					{
-						whileCnt++;
-						fprintf(jfp, "goto LWbegin_%d\n", whileCnt);
-					} 
 					compound_statement WHILE L_PAREN logical_expression R_PAREN SEMICOLON  
 					{ 
-						 verifyBooleanExpr( $7, "while" );
+						 verifyBooleanExpr( $6, "while" );
 						 inloop--;
-						 fprintf(jfp, "ifeq LWExit_%d\n", whileCnt);
-						 fprintf(jfp, "LWExit_%d\n", whileCnt);
 					}
 				;
 
@@ -745,26 +804,27 @@ while_statement : WHILE
 				
 for_statement : FOR L_PAREN initial_expression SEMICOLON 
 				{
-					forCnt++;
-					fprintf(jfp, "Lfor_%d:\n", forCnt);
+					condCnt++;
+					labelCnt++;
+					condStack[condCnt] = labelCnt;
+					fprintf(jfp, "Lfor_%d:\n", condStack[condCnt]);
 				}
 				control_expression SEMICOLON 
 				{
-					fprintf(jfp, "ifeq LforExit_%d\n", forCnt);
-					fprintf(jfp, "goto LforBlock_%d\n", forCnt);
-					fprintf(jfp, "LforIncre_%d:\n", forCnt);
+					fprintf(jfp, "ifeq LforExit_%d\n", condStack[condCnt]);
+					fprintf(jfp, "goto LforBlock_%d\n", condStack[condCnt]);
+					fprintf(jfp, "LforIncre_%d:\n", condStack[condCnt]);
 				}
 				increment_expression R_PAREN  
 				{ 
-					fprintf(jfp, "goto Lfor_%d\n", forCnt);
-					fprintf(jfp, "LforBlock_%d:\n", forCnt);
-					conditionCnt++;
+					fprintf(jfp, "goto Lfor_%d\n", condStack[condCnt]);
+					fprintf(jfp, "LforBlock_%d:\n", condStack[condCnt]);
 					inloop++; 
 				}
 				compound_statement  
 				{ 
-					fprintf(jfp, "goto LforIncre_%d\n", forCnt);
-					fprintf(jfp, "LforExit_%d:\n", forCnt--);
+					fprintf(jfp, "goto LforIncre_%d\n", condStack[condCnt]);
+					fprintf(jfp, "LforExit_%d:\n", condStack[condCnt--]);
 					inloop--; 
 				}
 			  ;
@@ -870,6 +930,7 @@ function_invoke_statement : ID L_PAREN logical_expression_list R_PAREN SEMICOLON
 									}
 									curr = curr->next ;
 								}
+								paramType[cnt] = '\0';
 								fprintf(jfp, "invokestatic output/%s(%s)", $1, paramType);
 								struct SymNode *func = lookupSymbol(symbolTable, $1, 0, __FALSE);
 								struct PType *pType = func->type;
@@ -935,7 +996,29 @@ jump_statement : CONTINUE SEMICOLON
 				}
 			   | RETURN logical_expression SEMICOLON
 				{
-					verifyReturnStatement( $2, funcReturn );	
+					verifyReturnStatement( $2, funcReturn );
+					if (mainFlag == 1){
+						fprintf(jfp, "return\n");
+						mainFlag = 0;
+					}
+					else {
+						switch(funcReturn->type){
+							case BOOLEAN_t:
+							case INTEGER_t:
+								fprintf(jfp, "ireturn\n;");
+								break;
+							case FLOAT_t:
+								fprintf(jfp, "freturn\n");
+								break;
+							case DOUBLE_t:
+								fprintf(jfp, "dreturn\n");
+								break;
+							default:
+								fprintf(jfp, "return\n");
+								break;
+						}
+					}
+					
 				}
 			   ;
 
@@ -985,39 +1068,48 @@ logical_factor : NOT_OP logical_factor
 
 relation_expression : arithmetic_expression relation_operator arithmetic_expression
 					{
-						conditionCnt++;
 						verifyRelOp( $1, $2, $3 );
 						$$ = $1;
-						if ($1->pType == FLOAT_t || $3->pType == FLOAT_t)
+
+						condCnt++;
+						labelCnt++;
+						condStack[condCnt] = labelCnt;
+						struct expr_sem *a = $1;
+						struct expr_sem *b = $3;
+						int typeA = a->pType->type;
+						int typeB = b->pType->type;
+						printf("~~%d\t%d\n", typeA, typeB);
+						if ((typeA == FLOAT_t || typeA == FLOAT_t) || (typeB == FLOAT_t || typeB == DOUBLE_t)){
 							fprintf(jfp, "fcmpl\n");
+						}
 						else
 							fprintf(jfp, "isub\n");
 						switch ($2){
 							case LT_t:
-								fprintf(jfp, "iflt Ltrue_%d\n", conditionCnt);
+								fprintf(jfp, "iflt Ltrue_%d\n", condStack[condCnt]);
 								break;
 							case LE_t:
-								fprintf(jfp, "ifle Ltrue_%d\n", conditionCnt);
+								fprintf(jfp, "ifle Ltrue_%d\n", condStack[condCnt]);
 								break;
 							case EQ_t:
-								fprintf(jfp, "ifeq Ltrue_%d\n", conditionCnt);
+								fprintf(jfp, "ifeq Ltrue_%d\n", condStack[condCnt]);
 								break;
 							case GE_t:
-								fprintf(jfp, "ifge Ltrue_%d\n", conditionCnt);
+								fprintf(jfp, "ifge Ltrue_%d\n", condStack[condCnt]);
 								break;
 							case GT_t:
-								fprintf(jfp, "ifgt Ltrue_%d\n", conditionCnt);
+								fprintf(jfp, "ifgt Ltrue_%d\n", condStack[condCnt]);
 								break;
 							case NE_t:
-								fprintf(jfp, "ifne Ltrue_%d\n", conditionCnt);
+								fprintf(jfp, "ifne Ltrue_%d\n", condStack[condCnt]);
 								break;
 						}
 						fprintf(jfp, "iconst_0\n");
-						fprintf(jfp, "goto Lfalse_%d\n", conditionCnt);
-						fprintf(jfp, "Ltrue_%d:\n", conditionCnt);
+						fprintf(jfp, "goto Lfalse_%d\n", condStack[condCnt]);
+						fprintf(jfp, "Ltrue_%d:\n", condStack[condCnt]);
 						fprintf(jfp, "iconst_1\n");
-						fprintf(jfp, "Lfalse_%d:\n", conditionCnt);
-						conditionCnt--;
+						fprintf(jfp, "Lfalse_%d:\n", condStack[condCnt]);
+						condCnt--;
 					}
 					| arithmetic_expression { $$ = $1; }
 					;
