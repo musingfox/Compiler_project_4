@@ -16,6 +16,8 @@ extern int Opt_Symbol;		/* declared in lex.l */
 extern FILE* jfp;
 int top = 0;
 int conditionCnt = 0;
+int forCnt = 0;
+int whileCnt = 0;
 
 int scope = 0;
 
@@ -107,7 +109,30 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					fprintf(jfp, ".limit locals 100\n");
 				}
 			}
-			compound_statement { funcReturn = 0;fprintf(jfp, "return\n"); fprintf(jfp, ".end method\n");}	
+			compound_statement 
+			{ 
+				funcReturn = 0;
+				if (strcmp($2, "main") != 0){
+					switch($1->type){
+						case BOOLEAN_t:
+						case INTEGER_t:
+							fprintf(jfp, "ireturn\n");
+							break;
+						case FLOAT_t:
+							fprintf(jfp, "freturn\n");
+							break;
+						case DOUBLE_t:
+							fprintf(jfp, "dreturn\n");
+							break;
+						default:
+							break;
+					}
+				}
+				else {
+					fprintf(jfp, "return\n");
+				}
+				fprintf(jfp, ".end method\n");
+			}	
 		  | scalar_type ID L_PAREN parameter_list R_PAREN  
 			{				
 				funcReturn = $1;
@@ -132,7 +157,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 						insertFuncIntoSymTable( symbolTable, $2, $4, $1, scope, __TRUE );
 					}
 					struct param_sem* param = $4;
-					char paramType[255];
+					char paramType[10];
 					int cnt=0;
 					while (param!=0){
 						char temp[1];
@@ -155,6 +180,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 						param = param->next;
 					}
 					top += cnt;
+					paramType[cnt] = '\0';
 					switch ($1->type){
 						case INTEGER_t:
 							fprintf(jfp, ".method public static %s(%s)I\n", $2, paramType);
@@ -175,7 +201,25 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					fprintf(jfp, ".limit locals 100\n");
 				}
 			} 	
-			compound_statement { funcReturn = 0; fprintf(jfp, "return\n"); fprintf(jfp, ".end method\n");}
+			compound_statement 
+			{ 
+				funcReturn = 0; 
+				switch($1->type){
+					case BOOLEAN_t:
+					case INTEGER_t:
+						fprintf(jfp, "ireturn\n");
+						break;
+					case FLOAT_t:
+						fprintf(jfp, "freturn\n");
+						break;
+					case DOUBLE_t:
+						fprintf(jfp, "dreturn\n");
+						break;
+					default:
+						break;
+				}
+				fprintf(jfp, ".end method\n");
+			}
 		  | VOID ID L_PAREN R_PAREN 
 			{
 				funcReturn = createPType(VOID_t); 
@@ -215,7 +259,7 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 					}
 					// done function definition
 					struct param_sem* param = $4;
-					char paramType[255];
+					char paramType[10];
 					int cnt=0;
 					while (param!=0){
 						char temp[1];
@@ -233,10 +277,12 @@ funct_def : scalar_type ID L_PAREN R_PAREN
 								paramType[cnt++] = 'D';
 								break;
 							default:
+								paramType[cnt++] = '\0';
 								break;
 						}
 						param = param->next;
 					}
+					paramType[cnt] = '\0';
 					top += cnt;
 					fprintf(jfp, ".method public static %s(%s)V\n", $2, paramType);
 					fprintf(jfp, ".limit stack 100\n");
@@ -330,7 +376,7 @@ var_decl : scalar_type identifier_list SEMICOLON
 							else{
 								newNode = createVarNode( ptr->para->idlist->value, scope, ptr->para->pType, top++ );
 							}	
-							insertTab( symbolTable, newNode );								
+							insertTab( symbolTable, newNode );					
 						}
 					}
 				}
@@ -603,7 +649,7 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 						//todo : variable reference
 						struct SymNode *curr = lookupSymbol(symbolTable, $2->varRef->id, scope, __FALSE);
 						if (curr->scope == 0){
-							fprintf(jfp, "putstatic output/%s", curr->name);
+							fprintf(jfp, "putstatic output/%s\n", curr->name);
 							switch($2->pType->type){
 								case INTEGER_t:;
 									fprintf(jfp, "I");
@@ -647,15 +693,15 @@ simple_statement : variable_reference ASSIGN_OP logical_expression SEMICOLON
 				 ;
 
 conditional_statement : IF L_PAREN conditional_if  R_PAREN compound_statement
-						{fprintf(jfp, "Lelse_%d:\n", conditionCnt);}
+						{fprintf(jfp, "Lelse_%d:\n", conditionCnt--);}
 					  | IF L_PAREN conditional_if  R_PAREN compound_statement
 					  	{
 					  		conditionCnt--;
-					  		fprintf(jfp, "goto LExit_%d\n", conditionCnt++);
-							fprintf(jfp, "Lelse_%d:\n", conditionCnt--);
+					  		fprintf(jfp, "goto LExit_%d\n", conditionCnt);
+							fprintf(jfp, "Lelse_%d:\n", conditionCnt);
 					  	}
 						ELSE compound_statement
-						{fprintf(jfp, "LExit_%d:\n", conditionCnt);}
+						{fprintf(jfp, "LExit_%d:\n", conditionCnt--);}
 					  ;
 conditional_if : logical_expression 
 					{ 
@@ -665,13 +711,33 @@ conditional_if : logical_expression
 					};					  
 
 				
-while_statement : WHILE L_PAREN logical_expression { verifyBooleanExpr( $3, "while" ); } R_PAREN { inloop++; }
-					compound_statement { inloop--; }
-				| { inloop++; } DO compound_statement WHILE L_PAREN logical_expression R_PAREN SEMICOLON  
+while_statement : WHILE
+					{
+						fprintf(jfp, "LWbegin_%d:\n", whileCnt++);
+					}
+				  L_PAREN logical_expression 
+				  	{ 
+				  		verifyBooleanExpr( $4, "while" );
+				  		fprintf(jfp, "ifeq LWExit_%d\n", whileCnt);
+				  	} 
+				  	R_PAREN { inloop++; }
+					compound_statement 
 					{ 
-						 verifyBooleanExpr( $6, "while" );
-						 inloop--; 
-						
+						inloop--; 
+						fprintf(jfp, "goto LWbegin_%d\n", whileCnt);
+						fprintf(jfp, "LWExit_%d:\n", whileCnt--);
+					}
+				| { inloop++; } DO 
+					{
+						whileCnt++;
+						fprintf(jfp, "goto LWbegin_%d\n", whileCnt);
+					} 
+					compound_statement WHILE L_PAREN logical_expression R_PAREN SEMICOLON  
+					{ 
+						 verifyBooleanExpr( $7, "while" );
+						 inloop--;
+						 fprintf(jfp, "ifeq LWExit_%d\n", whileCnt);
+						 fprintf(jfp, "LWExit_%d\n", whileCnt);
 					}
 				;
 
@@ -679,17 +745,28 @@ while_statement : WHILE L_PAREN logical_expression { verifyBooleanExpr( $3, "whi
 				
 for_statement : FOR L_PAREN initial_expression SEMICOLON 
 				{
-
+					forCnt++;
+					fprintf(jfp, "Lfor_%d:\n", forCnt);
 				}
 				control_expression SEMICOLON 
 				{
-
+					fprintf(jfp, "ifeq LforExit_%d\n", forCnt);
+					fprintf(jfp, "goto LforBlock_%d\n", forCnt);
+					fprintf(jfp, "LforIncre_%d:\n", forCnt);
 				}
 				increment_expression R_PAREN  
 				{ 
+					fprintf(jfp, "goto Lfor_%d\n", forCnt);
+					fprintf(jfp, "LforBlock_%d:\n", forCnt);
+					conditionCnt++;
 					inloop++; 
 				}
-				compound_statement  { inloop--; }
+				compound_statement  
+				{ 
+					fprintf(jfp, "goto LforIncre_%d\n", forCnt);
+					fprintf(jfp, "LforExit_%d:\n", forCnt--);
+					inloop--; 
+				}
 			  ;
 
 initial_expression : initial_expression COMMA statement_for		
@@ -745,6 +822,22 @@ statement_for 	: variable_reference ASSIGN_OP logical_expression
 						// if both LHS and RHS are exists, verify their type
 						if( flagLHS==__TRUE && flagRHS==__TRUE )
 							verifyAssignmentTypeMatch( $1, $3 );
+						switch ($1->pType->type){
+							case BOOLEAN_t:
+							case INTEGER_t:
+								fprintf(jfp, "istore");
+								break;
+							case DOUBLE_t:
+								fprintf(jfp, "dstore");
+								break;
+							case FLOAT_t:
+								fprintf(jfp, "fstore");
+								break;
+							default:
+								break;
+						}
+						struct SymNode *curr = lookupSymbol(symbolTable, $1->varRef->id, scope, __FALSE);
+						fprintf(jfp, " %d\n", curr->stackEntry);
 					}
 					;
 					 
@@ -777,12 +870,54 @@ function_invoke_statement : ID L_PAREN logical_expression_list R_PAREN SEMICOLON
 									}
 									curr = curr->next ;
 								}
-								paramType[cnt] = '\0';
-								fprintf(jfp, "invokestatic output/%s(%s) type\n", $1, paramType);
+								fprintf(jfp, "invokestatic output/%s(%s)", $1, paramType);
+								struct SymNode *func = lookupSymbol(symbolTable, $1, 0, __FALSE);
+								struct PType *pType = func->type;
+								switch(pType->type){
+									case INTEGER_t:
+										fprintf(jfp, "I\n");
+										break;
+									case BOOLEAN_t:
+										fprintf(jfp, "Z\n");
+										break;
+									case FLOAT_t:
+										fprintf(jfp, "F\n");
+										break;
+									case DOUBLE_t:
+										fprintf(jfp, "D\n");
+										break;
+									case VOID_t:
+										fprintf(jfp, "V\n");
+										break;
+									default:
+										break;
+								}
 							}
 						  | ID L_PAREN R_PAREN SEMICOLON
 							{
 								verifyFuncInvoke( $1, 0, symbolTable, scope );
+								fprintf(jfp, "invokestatic output/%s()", $1);
+								struct SymNode *func = lookupSymbol(symbolTable, $1, 0, __FALSE);
+								struct PType *pType = func->type;
+								switch(pType->type){
+									case INTEGER_t:
+										fprintf(jfp, "I\n");
+										break;
+									case BOOLEAN_t:
+										fprintf(jfp, "Z\n");
+										break;
+									case FLOAT_t:
+										fprintf(jfp, "F\n");
+										break;
+									case DOUBLE_t:
+										fprintf(jfp, "D\n");
+										break;
+									case VOID_t:
+										fprintf(jfp, "V\n");
+										break;
+									default:
+										break;
+								}
 							}
 						  ;
 
@@ -800,8 +935,7 @@ jump_statement : CONTINUE SEMICOLON
 				}
 			   | RETURN logical_expression SEMICOLON
 				{
-					verifyReturnStatement( $2, funcReturn );
-					fprintf(jfp, "return\n");
+					verifyReturnStatement( $2, funcReturn );	
 				}
 			   ;
 
@@ -854,7 +988,10 @@ relation_expression : arithmetic_expression relation_operator arithmetic_express
 						conditionCnt++;
 						verifyRelOp( $1, $2, $3 );
 						$$ = $1;
-						fprintf(jfp, "fcmpl\n");
+						if ($1->pType == FLOAT_t || $3->pType == FLOAT_t)
+							fprintf(jfp, "fcmpl\n");
+						else
+							fprintf(jfp, "isub\n");
 						switch ($2){
 							case LT_t:
 								fprintf(jfp, "iflt Ltrue_%d\n", conditionCnt);
